@@ -1,13 +1,10 @@
 2025-04-20
-- [x] how we run integration tests
-    - rename tox entry point and the test
 - [ ] in Python: rename run_tests -> build_and_test
     - [ ] rename `run_tests_and_format_code.sh` to what?
     - [ ] Jay wants to remove `.sh`
     - [ ] What is the impact on TAB-completion?
 - [ ] mypy in Python
 - [ ] fix disabled test for inline whitespace
-- [ ] mypy in CommonScripts - tox?
 - [ ] setup.approval_utilities.py and setup.py are different but should not be
 - [ ] packaging has deprecation warnings
  
@@ -257,7 +254,7 @@ How to connect a Jetbrains product to a remote workspace.
     1. Do we make a github action whose sole purpose is to lint? 
     2. Options: Lint passes/fails or autocorrects? 
     3. Actions work well when simple. Make a lint.bat and go from there
-12. linter - add flake8 to pycharm and tox
+12. linter - add flake8 to pycharm and build
 13. check all uses of default reporter in tests
 14. Fail test if there are duplicate names - pylint ?
 15. add checks to twine in github actions

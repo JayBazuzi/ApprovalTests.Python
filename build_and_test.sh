@@ -1,23 +1,10 @@
 #! /usr/bin/env bash
 set -euo pipefail
 
-if command -v python &>/dev/null; then
-    PYTHON=python
-else
-    PYTHON=python3
-fi
+command -v uv >/dev/null || { echo "Install uv. https://docs.astral.sh/uv/getting-started/installation/" >&2; exit 1; }
+uv venv --seed --quiet
+uv pip install -r requirements.txt --quiet
 
-if [ ! -d ".venv" ]; then
-    $PYTHON -m venv .venv
-fi
-if [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
-elif [ -f ".venv/Scripts/activate" ]; then
-    source .venv/Scripts/activate
-else
-    echo "Could not find virtual environment activation script."
-    exit 1
-fi
 
 LOG_FILE=$(mktemp -t approvaltests_run_tests.XXXXXX.log)
 
@@ -31,9 +18,8 @@ run_step() {
     fi
 }
 
-run_step "install tox" python -m pip --disable-pip-version-check install tox
-run_step "run unit tests" python -m tox -e py -- --junitxml=test-reports/report.xml
-run_step "run mypy" python -m tox -e mypy
-run_step "run integration tests" python -m tox -e integration_tests
+run_step "run unit tests" uv run pytest --junitxml=test-reports/report.xml
+run_step "run mypy" uv run mypy .
+run_step "run integration tests" uv run test__mypy_accepts_our_packages.py
 
 rm -f "$LOG_FILE"
