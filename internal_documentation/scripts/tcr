@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+def get_repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def get_ignore_dir() -> Path:
+    return get_repo_root() / ".ignore"
+
+
+def get_venv_bin() -> Path | None:
+    venv_bin = get_repo_root() / ".venv" / "bin"
+    return venv_bin if venv_bin.exists() else None
+
+
+def get_environment() -> dict[str, str]:
+    env = os.environ.copy()
+    venv_bin = get_venv_bin()
+    if venv_bin:
+        env["PATH"] = str(venv_bin) + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def find_mise() -> str | None:
+    return shutil.which("mise") or shutil.which("mise", path=str(Path.home() / ".local" / "bin"))
+
+
+def get_test_command() -> str:
+    command = os.environ.get("TCR_TEST_COMMAND", "")
+    if command:
+        return command
+    if find_mise():
+        return "mise task run test"
+    return "python -m pytest tests -q"
+
+
+def run_test_command() -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        get_test_command(),
+        cwd=get_repo_root(),
+        env=get_environment(),
+        shell=True,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def git_command(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=get_repo_root(),
+        check=check,
+        capture_output=True,
+        text=True,
+    )
+
+
+def get_commit_message_path() -> Path:
+    return get_ignore_dir() / "commit-message.txt"
+
+
+def get_cosmic_dump_path() -> Path:
+    return get_ignore_dir() / "cosmic-ray-dump.json"
+
+
+def revert_changes() -> None:
+    subprocess.run(["git", "checkout", "--", "."], cwd=get_repo_root(), check=False)
+    subprocess.run(["git", "clean", "-fd"], cwd=get_repo_root(), check=False)
+
+
+def main() -> None:
+    test_result = run_test_command()
+    if test_result.returncode != 0:
+        if test_result.stdout:
+            print(test_result.stdout, file=sys.stderr)
+        if test_result.stderr:
+            print(test_result.stderr, file=sys.stderr)
+        revert_changes()
+        print("tcr: reverted")
+        sys.exit(1)
+
+    git_command("add", "-A", check=False)
+    diff_result = git_command("diff", "--cached", "--quiet", check=False)
+    if diff_result.returncode == 0:
+        print("tcr: no changes to commit")
+        sys.exit(0)
+
+    commit_message_path = get_commit_message_path()
+    if not commit_message_path.exists():
+        commit_message_path.write_text("Mutation testing fix")
+
+    commit_result = git_command("commit", "-F", str(commit_message_path), check=False)
+    if commit_result.returncode != 0:
+        if commit_result.stdout:
+            print(commit_result.stdout, file=sys.stderr)
+        if commit_result.stderr:
+            print(commit_result.stderr, file=sys.stderr)
+        revert_changes()
+        print("tcr: reverted")
+        sys.exit(1)
+
+    cosmic_dump = get_cosmic_dump_path()
+    if cosmic_dump.exists():
+        cosmic_dump.unlink()
+
+    print("tcr: committed")
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

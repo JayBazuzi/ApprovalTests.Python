@@ -73,5 +73,7 @@ tests/approved_files/VerifyTests.test_verify_automatic_approval.approved.txt
 junit-reports/TEST-results.xml
 
 .ignore/
+mutants/
+.wesker/
 
 /setup.py

@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+def get_repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def get_process_doc() -> Path:
+    return get_repo_root() / "internal_documentation" / "mutation_testing.process.md"
+
+
+def get_commit_message_path() -> Path:
+    commit_message_path = get_repo_root() / ".ignore" / "commit-message.txt"
+    commit_message_path.parent.mkdir(exist_ok=True)
+    return commit_message_path
+
+
+def get_ai_command() -> str:
+    return os.environ.get(
+        "AI_COMMAND",
+        "claude --dangerously-skip-permissions -p --output-format text --verbose",
+    )
+
+
+def main() -> None:
+    process_doc = get_process_doc()
+    if not process_doc.exists():
+        print(f"Process doc not found: {process_doc}", file=sys.stderr)
+        sys.exit(1)
+
+    commit_message_path = get_commit_message_path()
+    commit_message_path.write_text("")
+
+    prompt = process_doc.read_text()
+    subprocess.run(
+        get_ai_command(),
+        shell=True,
+        input=prompt,
+        text=True,
+        check=False,
+    )
+
+
+if __name__ == "__main__":
+    main()

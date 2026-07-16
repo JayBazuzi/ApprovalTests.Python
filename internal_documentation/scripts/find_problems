@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+def get_repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def get_ignore_dir() -> Path:
+    ignore_dir = get_repo_root() / ".ignore"
+    ignore_dir.mkdir(exist_ok=True)
+    return ignore_dir
+
+
+def get_venv_bin() -> Path | None:
+    venv_bin = get_repo_root() / ".venv" / "bin"
+    return venv_bin if venv_bin.exists() else None
+
+
+def get_environment() -> dict[str, str]:
+    env = os.environ.copy()
+    venv_bin = get_venv_bin()
+    if venv_bin:
+        env["PATH"] = str(venv_bin) + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def get_cosmic_ray_command() -> list[str]:
+    env = get_environment()
+    cosmic_ray = shutil.which("cosmic-ray", path=env.get("PATH"))
+    if cosmic_ray:
+        return [cosmic_ray]
+    cosmic_ray_in_venv = get_venv_bin() / "cosmic-ray" if get_venv_bin() else None
+    if cosmic_ray_in_venv and cosmic_ray_in_venv.exists():
+        return [str(cosmic_ray_in_venv)]
+    print("cosmic-ray is not installed or not on PATH.", file=sys.stderr)
+    sys.exit(1)
+
+
+def get_target() -> str:
+    return os.environ.get(
+        "MUTATION_TARGET",
+        "approval_utilities/utilities/stack_frame_utilities.py",
+    )
+
+
+def get_test_command() -> str:
+    return os.environ.get(
+        "MUTATION_TEST_COMMAND",
+        "python -m pytest tests/test_namer.py -x",
+    )
+
+
+def get_timeout() -> str:
+    return os.environ.get("MUTATION_TIMEOUT", "30.0")
+
+
+def write_config(config_path: Path) -> None:
+    config = f"""[cosmic-ray]
+module-path = {json.dumps(get_target())}
+timeout = {get_timeout()}
+excluded-modules = []
+test-command = {json.dumps(get_test_command())}
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = ["core/RemoveDecorator"]
+
+[cosmic-ray.distributor]
+name = "local"
+"""
+    config_path.write_text(config)
+
+
+def run_command(command: list[str], cwd: Path, env: dict[str, str]) -> None:
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        if result.stdout:
+            print(result.stdout, file=sys.stderr)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        sys.exit(1)
+
+
+def run_cosmic_ray(config_path: Path, session_path: Path, dump_path: Path) -> None:
+    repo_root = get_repo_root()
+    env = get_environment()
+    cosmic_ray = get_cosmic_ray_command()
+    run_command([*cosmic_ray, "baseline", str(config_path)], repo_root, env)
+    run_command([*cosmic_ray, "init", "--force", str(config_path), str(session_path)], repo_root, env)
+    run_command([*cosmic_ray, "exec", str(config_path), str(session_path)], repo_root, env)
+    dump_result = subprocess.run(
+        [*cosmic_ray, "dump", str(session_path)],
+        cwd=repo_root,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if dump_result.returncode != 0:
+        if dump_result.stderr:
+            print(dump_result.stderr, file=sys.stderr)
+        sys.exit(1)
+    dump_path.write_text(dump_result.stdout)
+
+
+def parse_survivors(dump_path: Path) -> list[tuple[dict, dict]]:
+    survivors = []
+    for line in dump_path.read_text().splitlines():
+        if not line.strip():
+            continue
+        data = json.loads(line)
+        job, outcome = data
+        if outcome.get("test_outcome") == "survived":
+            survivors.append((job, outcome))
+    return survivors
+
+
+def write_current_mutation(
+    job: dict, outcome: dict, current_mutation_path: Path, current_id_path: Path, current_json_path: Path
+) -> None:
+    mutation = job["mutations"][0]
+    diff = outcome.get("diff", "")
+    description = (
+        f"Surviving mutant:\n"
+        f"module: {mutation.get('module_path')}\n"
+        f"operator: {mutation.get('operator_name')}\n"
+        f"definition: {mutation.get('definition_name', '')}\n"
+        f"{diff}"
+    )
+    current_mutation_path.write_text(description)
+    current_id_path.write_text(job["job_id"])
+    current_json_path.write_text(json.dumps({"job": job, "outcome": outcome}))
+
+
+def main() -> None:
+    ignore_dir = get_ignore_dir()
+    config_path = ignore_dir / "cosmic-ray-config.toml"
+    session_path = ignore_dir / "cosmic-ray.sqlite"
+    dump_path = ignore_dir / "cosmic-ray-dump.json"
+    current_mutation_path = ignore_dir / "current_mutation.txt"
+    current_id_path = ignore_dir / "current_mutation_id.txt"
+    current_json_path = ignore_dir / "current_mutation.json"
+
+    write_config(config_path)
+    run_cosmic_ray(config_path, session_path, dump_path)
+    survivors = parse_survivors(dump_path)
+
+    if not survivors:
+        print("No surviving mutants found.")
+        sys.exit(1)
+
+    job, outcome = survivors[0]
+    write_current_mutation(
+        job,
+        outcome,
+        current_mutation_path,
+        current_id_path,
+        current_json_path,
+    )
+    print(f"Found surviving mutant: {job['job_id']}")
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
