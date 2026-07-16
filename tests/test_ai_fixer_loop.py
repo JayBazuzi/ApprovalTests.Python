@@ -26,6 +26,49 @@ def test_ai_fixer_loop() -> None:
     )
 
 
+def test_mutation_testing_workflow() -> None:
+    """
+    Running initial check...
+    ✅ tcr: committed [time]
+    ✅ build working
+    -----------------------------
+    Run #1
+    ✅ found problems [time]
+    ✅ fix problem [time]
+    ✅ tcr: committed [time]
+    -----------------------------
+    Run #2
+    ✅ found problems [time]
+    ✅ fix problem [time]
+    ❌ tcr: reverted [time]
+    --- STDERR ---
+    Test passed on mutated code; expected it to fail.
+
+    -----------------------------
+    Run #3
+    ✅ found problems [time]
+    ✅ fix problem [time]
+    ✅ tcr: committed [time]
+    -----------------------------
+    Run #4
+    ❌ found problems [time]
+    --- STDERR ---
+    No surviving mutants found.
+
+    no more problems found.
+    """
+    python = sys.executable
+    cwd = _REPO_ROOT / "internal_documentation" / "scripts"
+    verify_command_line(
+        python
+        + f" ai_fixer_loop.py --find test_mutation_find --fix test_mutation_fix --tcr {_REPO_ROOT / 'internal_documentation/scripts/test_mutation_tcr'}",
+        current_working_directory=str(cwd),
+        options=Options()
+        .inline()
+        .with_scrubber(lambda text: re.sub(r" \[[\d\.]+s\]", " [time]", text)),
+    )
+
+
 def test_argument_parser() -> None:
     """
     usage: ai_fixer_loop [-h] [--find FIND] [--fix FIX] [--tcr TCR]
