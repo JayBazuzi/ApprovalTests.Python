@@ -1,0 +1,54 @@
+#! /usr/bin/env bash
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$REPO_ROOT"
+
+MUTMUT=".venv/bin/mutmut"
+PYTHON=".venv/bin/python"
+
+run_suite() { $PYTHON -m pytest -q >/dev/null 2>&1; }
+
+revert_everything() {
+    git checkout -- .
+    git clean -fd
+}
+
+if ! run_suite; then
+    revert_everything
+    echo "tcr: reverted (test suite is failing)"
+    exit 1
+fi
+
+if [ ! -f .ignore/mutant_id.txt ]; then
+    echo "build working"
+    exit 0
+fi
+
+mutant_id="$(cat .ignore/mutant_id.txt)"
+
+$MUTMUT apply "$mutant_id"
+if run_suite; then
+    killed=0
+else
+    killed=1
+fi
+git checkout -- approvaltests approval_utilities
+
+if [ "$killed" -ne 1 ]; then
+    revert_everything
+    echo "tcr: reverted (mutant #$mutant_id still survives)"
+    exit 1
+fi
+
+if [ ! -s .ignore/commit-message.txt ]; then
+    echo "test: kill surviving mutant #$mutant_id" >.ignore/commit-message.txt
+fi
+
+$MUTMUT run "$mutant_id" >/dev/null 2>&1 || true
+
+git add -A
+git commit -F .ignore/commit-message.txt >/dev/null
+echo "tcr: committed (mutant #$mutant_id killed)"
+exit 0
