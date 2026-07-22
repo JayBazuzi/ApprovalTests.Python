@@ -26,10 +26,10 @@ abstract sequence like this:
    The AI changes **test code only** - never the production code being mutated.
 
 3. **Verify and commit (deterministic, no AI) - `tcr_mutant`**
-   Verify that (a) the full suite is green on the un-mutated code, and (b) the
-   selected mutant is now killed. It confirms (b) by applying the mutant to the
-   source, running the suite (which must now fail), then reverting the mutation.
-   If both hold it commits; otherwise it reverts.
+   First discard any production-code edits (the fix must be tests-only), then
+   verify that (a) the full suite is green, and (b) the selected mutant is now
+   killed - by re-running `mutmut` against just that mutant. If both hold it
+   commits; otherwise it reverts.
 
 The loop repeats until `find_mutant` reports no surviving mutants.
 

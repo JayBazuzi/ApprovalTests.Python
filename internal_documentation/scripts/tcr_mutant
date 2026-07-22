@@ -15,28 +15,26 @@ revert_everything() {
     git clean -fd
 }
 
+if [ ! -f .ignore/mutant_id.txt ]; then
+    if run_suite; then
+        echo "build working"
+        exit 0
+    fi
+    echo "build broken"
+    exit 1
+fi
+
+git checkout -- approvaltests approval_utilities
+
 if ! run_suite; then
     revert_everything
     echo "tcr: reverted (test suite is failing)"
     exit 1
 fi
 
-if [ ! -f .ignore/mutant_id.txt ]; then
-    echo "build working"
-    exit 0
-fi
-
 mutant_id="$(cat .ignore/mutant_id.txt)"
 
-$MUTMUT apply "$mutant_id"
-if run_suite; then
-    killed=0
-else
-    killed=1
-fi
-git checkout -- approvaltests approval_utilities
-
-if [ "$killed" -ne 1 ]; then
+if ! $MUTMUT run "$mutant_id" >/dev/null 2>&1; then
     revert_everything
     echo "tcr: reverted (mutant #$mutant_id still survives)"
     exit 1
@@ -45,8 +43,6 @@ fi
 if [ ! -s .ignore/commit-message.txt ]; then
     echo "test: kill surviving mutant #$mutant_id" >.ignore/commit-message.txt
 fi
-
-$MUTMUT run "$mutant_id" >/dev/null 2>&1 || true
 
 git add -A
 git commit -F .ignore/commit-message.txt >/dev/null
