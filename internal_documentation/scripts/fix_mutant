@@ -1,0 +1,9 @@
+#! /usr/bin/env bash
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$REPO_ROOT"
+
+cat "$REPO_ROOT/internal_documentation/mutation.process.md" |
+    claude --dangerously-skip-permissions -p --output-format text --verbose

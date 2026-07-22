@@ -1,0 +1,27 @@
+#! /usr/bin/env bash
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$REPO_ROOT"
+
+MUTMUT=".venv/bin/mutmut"
+
+mkdir -p .ignore
+
+$MUTMUT run >/dev/null 2>&1 || true
+
+survivors="$($MUTMUT result-ids survived 2>/dev/null || true)"
+
+if [ -z "$survivors" ]; then
+    echo "no surviving mutants"
+    exit 1
+fi
+
+mutant_id="$(echo "$survivors" | tr ' ' '\n' | head -n 1)"
+echo "$mutant_id" >.ignore/mutant_id.txt
+$MUTMUT show "$mutant_id" >.ignore/mutant.txt
+
+echo "surviving mutant #$mutant_id"
+cat .ignore/mutant.txt
+exit 0

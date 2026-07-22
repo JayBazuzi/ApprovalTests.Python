@@ -74,4 +74,8 @@ junit-reports/TEST-results.xml
 
 .ignore/
 
+# mutation testing
+.mutmut-cache
+/html/
+
 /setup.py
