@@ -3,6 +3,7 @@ numpy
 pytest
 pytest-asyncio
 pytest-xdist
+mutmut==2.5.1
 PyYAML
 
 # mariadb
