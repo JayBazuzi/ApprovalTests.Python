@@ -13,5 +13,5 @@ Write a git commit message that describes the test you added to `.ignore/commit-
 Here's an example of what the commit message should look like:
 
 ```
-- r Kill mutant in scrubbers.py: assert templates_regex_scrubber replaces matches
+. t Kill mutant in scrubbers.py: assert templates_regex_scrubber replaces matches
 ```
